@@ -427,7 +427,59 @@ func (b *Bot) scheduleReminder(schedule *storage.Schedule) {
 		var scheduleHour, scheduleMin int
 		fmt.Sscanf(schedule.Time, "%d:%d", &scheduleHour, &scheduleMin)
 		
-		// Schedule reminders for each reminder time
+		// 1. Schedule MAIN notification (pada waktu yang sebenarnya)
+		weekday := dayToCronDay(day)
+		mainCronExpression := fmt.Sprintf("%d %d * * %s", scheduleMin, scheduleHour, weekday)
+		scheduleID := schedule.ID
+		mainNotifKey := fmt.Sprintf("%s_main", scheduleID)
+		
+		_, err := b.cron.AddFunc(mainCronExpression, func() {
+			// Refresh schedule dari storage untuk get latest data
+			latestSchedule, err := b.storage.GetSchedule(scheduleID)
+			if err != nil {
+				return
+			}
+			
+			note := latestSchedule.Note
+			if note == "" {
+				note = "(tanpa catatan)"
+			}
+			
+			// Check if main notification already sent (for "once" type)
+			if latestSchedule.ReminderType == "once" {
+				if latestSchedule.ReminderSent[mainNotifKey] {
+					return // Notifikasi utama sudah pernah dikirim
+				}
+			}
+			
+			// Send MAIN notification
+			mainText := fmt.Sprintf("🔔 WAKTUNYA SEKARANG!\n📌 %s\n⏰ Waktu: %s\n📝 %s", 
+				latestSchedule.Title, 
+				latestSchedule.Time,
+				note)
+			b.sendMessage(latestSchedule.UserID, mainText)
+			
+			// Mark as sent if type is "once"
+			if latestSchedule.ReminderType == "once" {
+				if latestSchedule.ReminderSent == nil {
+					latestSchedule.ReminderSent = make(map[string]bool)
+				}
+				latestSchedule.ReminderSent[mainNotifKey] = true
+				b.storage.UpdateSchedule(latestSchedule)
+				
+				// If all notifications sent (main + all reminders), delete the schedule
+				totalNotifications := 1 + len(latestSchedule.ReminderTimes) // 1 main + reminders
+				if len(latestSchedule.ReminderSent) == totalNotifications {
+					b.storage.DeleteSchedule(scheduleID)
+				}
+			}
+		})
+		
+		if err != nil {
+			log.Printf("Error scheduling main notification: %v\n", err)
+		}
+		
+		// 2. Schedule REMINDER notifications (sebelum waktu utama)
 		for _, reminderMinutes := range schedule.ReminderTimes {
 			// Calculate reminder time
 			reminderHour := scheduleHour
@@ -441,10 +493,7 @@ func (b *Bot) scheduleReminder(schedule *storage.Schedule) {
 				}
 			}
 			
-			weekday := dayToCronDay(day)
 			cronExpression := fmt.Sprintf("%d %d * * %s", reminderMin, reminderHour, weekday)
-			
-			scheduleID := schedule.ID
 			reminderKey := fmt.Sprintf("%s_%dm", scheduleID, reminderMinutes)
 			
 			_, err := b.cron.AddFunc(cronExpression, func() {
@@ -467,7 +516,11 @@ func (b *Bot) scheduleReminder(schedule *storage.Schedule) {
 				}
 				
 				// Send reminder
-				reminderText := fmt.Sprintf("⏰ Pengingat %d menit sebelum:\n📌 %s\n%s", reminderMinutes, latestSchedule.Title, note)
+				reminderText := fmt.Sprintf("⏰ Pengingat %d menit sebelum:\n📌 %s\n📝 %s\n⏰ Waktu: %s", 
+					reminderMinutes, 
+					latestSchedule.Title, 
+					note,
+					latestSchedule.Time)
 				b.sendMessage(latestSchedule.UserID, reminderText)
 				
 				// Mark as sent if type is "once"
@@ -478,8 +531,9 @@ func (b *Bot) scheduleReminder(schedule *storage.Schedule) {
 					latestSchedule.ReminderSent[reminderKey] = true
 					b.storage.UpdateSchedule(latestSchedule)
 					
-					// If all reminders sent, delete the schedule
-					if len(latestSchedule.ReminderSent) == len(latestSchedule.ReminderTimes) {
+					// Check if all notifications sent
+					totalNotifications := 1 + len(latestSchedule.ReminderTimes)
+					if len(latestSchedule.ReminderSent) == totalNotifications {
 						b.storage.DeleteSchedule(scheduleID)
 					}
 				}

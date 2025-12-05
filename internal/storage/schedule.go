@@ -13,12 +13,12 @@ type Schedule struct {
 	ID              string    `json:"id"`
 	UserID          int64     `json:"user_id"`
 	Title           string    `json:"title"`
-	Time            string    `json:"time"` // Format: HH:MM
-	Days            []string  `json:"days"` // [Monday, Tuesday, ...]
+	Time            string    `json:"time"` 
+	Days            []string  `json:"days"`
 	Note            string    `json:"note"`
-	ReminderType    string    `json:"reminder_type"`    // "once" atau "recurring"
-	ReminderTimes   []int     `json:"reminder_times"`   // [60, 30, 5] dalam menit sebelum jadwal
-	ReminderSent    map[string]bool `json:"reminder_sent"` // Track reminder yang sudah dikirim untuk tipe "once"
+	ReminderType    string    `json:"reminder_type"`    
+	ReminderTimes   []int     `json:"reminder_times"`   
+	ReminderSent    map[string]bool `json:"reminder_sent"` 
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
