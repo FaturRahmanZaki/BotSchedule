@@ -465,7 +465,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy...
 **Fatr Rahman**
 
 - Telegram: [@FtrRahman](https://t.me/FtrRahman)
-- GitHub: [@yourusername](https://github.com/yourusername)
+- GitHub: [@yourusername](https://github.com/FaturRahmanZaki)
 
 ---
 
